@@ -6,6 +6,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp> 
 #include <config.h>
+#include <string>
 
 static const std::string OPENCV_WINDOW = "Image window";
 static const std::string OUT_WINDOW = "Output window";
@@ -109,15 +110,42 @@ public:
 
         ///  Get the mass centers:
         vector<Point2f> mc(contours.size());
+        double maxArea = -1;
+        double numMax = -1;
+        double minArea = 20;
         for (int i = 0; i < contours.size(); i++) { 
             mc[i] = Point2f(mu[i].m10 / mu[i].m00, mu[i].m01 / mu[i].m00); 
+            double area = mu[i].m00;
+            //std::cout << "Area of moment " << i << ": " << mu[i].m00 << std::endl;
+            
+            int a = 10;
+            std::stringstream ss;
+            ss << area;
+            string areaStr = ss.str();
+            
+            //cv::putText(original_image, areaStr, mc[i], 1, 1, CV_RGB(0, 255, 255));
+            
+            if((area > maxArea) && (area > minArea)) {
+                maxArea = area;
+                numMax = i;
+            }
         }
 
+        if(numMax != -1) {
+            circle(original_image, mc[numMax], 5, CV_RGB(255, 255, 0), -1, 8, 0);
+        }
+        
+        
+            /**
+        
+             **/
+        /**
         for( int i = 0; i< contours.size(); i++ )
         {
             circle( original_image, mc[i], 15, CV_RGB(0, 0, 255), -1, 8, 0 );
             //cv::circle(original_image, mc[i], 10, CV_RGB(255, 0, 0));
         }
+         **/
         
         
         

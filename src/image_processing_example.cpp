@@ -7,6 +7,13 @@
 #include <opencv2/opencv.hpp> 
 #include <config.h>
 #include <string>
+#include <tf/tf.h>
+#include <move_base_msgs/MoveBaseAction.h>
+#include <actionlib/client/simple_action_client.h>
+#include <tf/transform_listener.h>
+#include <actionlib/server/simple_action_server.h>
+#include "geometry_msgs/Pose.h"
+#include "geometry_msgs/PoseArray.h"
 
 static const std::string OPENCV_WINDOW = "Image window";
 static const std::string OUT_WINDOW = "Output window";
@@ -18,20 +25,23 @@ int iHighS = 255;
 int iLowV = 0;
 int iHighV = 255;
 
+double const PI = 3.141592653;
 
 class ImageConverter {
     ros::NodeHandle nh_;
     image_transport::ImageTransport it_;
     image_transport::Subscriber image_sub_;
     image_transport::Publisher image_pub_;
+    actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> ac;
+    move_base_msgs::MoveBaseGoal goal;
 
 public:
     ImageConverter()
-            : it_(nh_) {
+            : it_(nh_), ac("move_base", true) {
         // Subscrive to input video feed and publish output video feed
         image_sub_ = it_.subscribe("/nav_kinect/rgb/image_color", 1, &ImageConverter::imageCb, this);
-        image_pub_ = it_.advertise("/image_converter/output_video", 1);
-
+        //image_pub_ = it_.advertise("/image_converter/output_video", 1);
+        
         /**
         //cv::namedWindow(OPENCV_WINDOW);
         cv::namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
@@ -72,27 +82,23 @@ public:
         cvtColor(original_image, imgHSV, cv::COLOR_BGR2HSV); // Conver to HSV
 
         //cv::Mat imgThresholded;
-        cv::Mat autoThresh;
+        //cv::Mat autoThresh;
         cv::Mat autoThreshContour;
-
+        
+        /**
         //inRange(imgHSV, cv::Scalar(iLowH, iLowS, iLowV), cv::Scalar(iHighH, iHighS, iHighV), imgThresholded); //Threshold the image
         inRange(imgHSV, cv::Scalar(MIN_HUE, MIN_SAT, MIN_VAL), cv::Scalar(MAX_HUE, MAX_SAT, MAX_VAL), autoThresh);
-
         cv::erode(autoThresh, autoThresh, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3)) );
         cv::dilate( autoThresh, autoThresh, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(4, 4)) );
         cv::dilate( autoThresh, autoThresh, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(4, 4)) );
         cv::erode(autoThresh, autoThresh, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3)) );
-
+        **/
         
         inRange(imgHSV, cv::Scalar(MIN_HUE, MIN_SAT, MIN_VAL), cv::Scalar(MAX_HUE, MAX_SAT, MAX_VAL), autoThreshContour);
-
         cv::erode(autoThreshContour, autoThreshContour, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3)) );
         cv::dilate( autoThreshContour, autoThreshContour, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(4, 4)) );
         cv::dilate( autoThreshContour, autoThreshContour, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(4, 4)) );
         cv::erode(autoThreshContour, autoThreshContour, cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3)) );
-
-
-
         
         vector<vector<Point> > contours;
         vector<Vec4i> hierarchy;
@@ -118,7 +124,6 @@ public:
             double area = mu[i].m00;
             //std::cout << "Area of moment " << i << ": " << mu[i].m00 << std::endl;
             
-            int a = 10;
             std::stringstream ss;
             ss << area;
             string areaStr = ss.str();
@@ -130,45 +135,57 @@ public:
                 numMax = i;
             }
         }
+        
+        double offset = 0;
 
         if(numMax != -1) {
             circle(original_image, mc[numMax], 5, CV_RGB(255, 255, 0), -1, 8, 0);
+            
+            double width = original_image.cols;
+            offset = mc[numMax].x - (width/2);
+            std::cout << "Offset: " << offset << std::endl;
+            //Point2f middle = Point2f(original_image.cols / 2, original_image.rows / 2);
+            //circle(original_image, middle, 5, CV_RGB(255, 255, 0), -1, 8, 0);
+            //Point2f middle2 = Point2f(mc[numMax].x, original_image.rows / 2);
+            //circle(original_image, middle2, 5, CV_RGB(255, 255, 0), -1, 8, 0);
         }
-        
-        
-            /**
-        
-             **/
-        /**
-        for( int i = 0; i< contours.size(); i++ )
-        {
-            circle( original_image, mc[i], 15, CV_RGB(0, 0, 255), -1, 8, 0 );
-            //cv::circle(original_image, mc[i], 10, CV_RGB(255, 0, 0));
+
+        double yaw = 0;
+        double threshold = 10;
+        if(maxArea > 20) {
+            if(offset > threshold) {
+                yaw = -PI;
+            } else if(offset < -threshold) {
+                yaw = PI;
+            } else {
+                yaw = 0;
+            }
+        } else {
+            yaw = 0;
         }
-         **/
+
+        
+        //set the header
+        goal.target_pose.header.stamp = ros::Time::now();
+        goal.target_pose.header.frame_id = "/base_link";
+
+        //set relative x, y, and angle
+        goal.target_pose.pose.position.x = 0.0;
+        goal.target_pose.pose.position.y = 0.0;
+        goal.target_pose.pose.position.z = 0.0;
+        goal.target_pose.pose.orientation = tf::createQuaternionMsgFromYaw(yaw);
+
+        //send the goal
+        ac.sendGoal(goal);
+
+        //block until the action is completed
+        //ac.waitForResult();
         
         
-        
-        
-        
-        cv::imshow("Auto-Thresholded Image", autoThresh);
+        //cv::imshow("Auto-Thresholded Image", autoThresh);
         cv::imshow("Auto-Thresholded Image", autoThreshContour);
         //cv::imshow("Thresholded Image", imgThresholded);
         cv::imshow("Original", original_image); //show the original image
-
-
-        /**
-        // Example 1: Draw an example circle on the video stream
-        outImg = cv_ptr->image.clone();
-        if (cv_ptr->image.rows > 60 && cv_ptr->image.cols > 60)
-            cv::circle(outImg, cv::Point(50, 50), 10, CV_RGB(255, 0, 0));
-        
-        //show input
-        cv::imshow(OPENCV_WINDOW, cv_ptr->image);
-
-        //show output
-        cv::imshow(OUT_WINDOW, outImg);
-         **/
 
         //pause for 3 ms
         cv::waitKey(3);
@@ -181,8 +198,6 @@ public:
 int main(int argc, char **argv) {
     ros::init(argc, argv, "image_converter");
     ImageConverter ic;
-    
-    
     
     ros::spin();
     return 0;

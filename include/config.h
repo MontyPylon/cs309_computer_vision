@@ -6,9 +6,3 @@
 #define MAX_SAT 255
 #define MIN_VAL 125
 #define MAX_VAL 255
-
-
-	
-		
-		
-		

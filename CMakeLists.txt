@@ -19,7 +19,13 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   pcl_ros
   pcl_conversions
-  sensor_msgs
+  sensor_msgs 
+        actionlib
+        actionlib_msgs
+        move_base_msgs
+        roscpp
+        rospy
+        tf
 )
 
 ## System dependencies are found with CMake's conventions
@@ -145,6 +151,9 @@ target_link_libraries(image_processing_example ${catkin_LIBRARIES} ${OpenCV_LIBR
 add_executable(motion_history_example src/motion_history_example.cpp)
 target_link_libraries(motion_history_example ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 
+target_link_libraries(image_processing_example
+        ${catkin_LIBRARIES}
+        )
 
 #############
 ## Install ##
